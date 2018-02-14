@@ -305,7 +305,7 @@ local function match_command(line)
 		["s"] = function() return true, hook_step end,
 		["n"] = function() return true, hook_next end,
 		["f"] = function() return true, hook_finish end,
-		["p%s?(.*)"] = cmd_print,
+		["p%s(.*)"] = cmd_print,
 		["u"] = cmd_up,
 		["d"] = cmd_down,
 		["t"] = cmd_trace,
@@ -320,6 +320,8 @@ local function match_command(line)
 			return cmd_func, select(2, unpack(matches))
 		end
 	end
+
+	return cmd_print, line
 end
 
 -- Run a command line
@@ -342,9 +344,6 @@ local function run_command(line)
 	if command then
 		-- unpack({...}) prevents tail call elimination so the stack frame indices are predictable.
 		return unpack({command(command_arg)})
-	else
-		dbg.writeln(COLOR_RED.."Error:"..COLOR_RESET.." command '%s' not recognized.\nType 'h' and press return for a command list.", line)
-		return false
 	end
 end
 
