@@ -457,13 +457,46 @@ if color_maybe_supported and not os.getenv("DBG_NOCOLOR") then
 	COLOR_RESET = string.char(27) .. "[0m"
 end
 
--- Conditionally enable LuaJIT readline support.
-local dbg_readline = nil
 pcall(function()
-	if ffi and stdin_isatty and not os.getenv("DBG_NOREADLINE") then
-		local readline = ffi.load("readline")
+	local linenoise = require 'linenoise'
 
-		dbg_readline = function(prompt)
+	-- Load command history from ~/.lua_history
+	local hist_path = os.getenv('HOME') .. '/.lua_history'
+	linenoise.historyload(hist_path)
+	linenoise.historysetmaxlen(50)
+
+	local autocomplete = function(scope, input, matches)
+		for name, _ in pairs(scope) do
+			if name:match('^' .. input .. '.*') then
+				linenoise.addcompletion(matches, name)
+			end
+		end
+	end
+
+	-- Auto-completion for locals and globals
+	linenoise.setcompletion(function(matches, input)
+		autocomplete(local_bindings(1, false), input, matches)
+		autocomplete(_G, input, matches)
+	end)
+
+	dbg.read = function(prompt)
+		-- Linenoise doesn't play nice with non-printing characters in the prompt.
+		prompt = prompt:gsub("\027%[[%d;]+m", "")
+		local str = linenoise.linenoise(prompt)
+		if str and not str:match "^%s*$" then
+			linenoise.historyadd(str)
+			linenoise.historysave(hist_path)
+		end
+		return str
+	end
+	dbg.writeln(COLOR_RED.."debugger.lua: Linenoise support enabled."..COLOR_RESET)
+end)
+
+-- Conditionally enable LuaJIT readline support.
+pcall(function()
+	if dbg.read == nil and ffi then
+		local readline = ffi.load("readline")
+		dbg.read = function(prompt)
 			local cstr = readline.readline(prompt)
 			if cstr ~= nil then
 				local str = ffi.string(cstr)
@@ -477,8 +510,6 @@ pcall(function()
 				return nil
 			end
 		end
-
-		dbg.read = dbg_readline
 		dbg.writeln(COLOR_RED.."debugger.lua: Readline support enabled."..COLOR_RESET)
 	end
 end)
