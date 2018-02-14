@@ -1,16 +1,16 @@
 --[[
 	Copyright (c) 2016 Scott Lembcke and Howling Moon Software
-	
+
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-	
+
 	The above copyright notice and this permission notice shall be included in
 	all copies or substantial portions of the Software.
-	
+
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -18,7 +18,7 @@
 	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 	SOFTWARE.
-	
+
 	TODO:
 	* Print short function arguments as part of stack location.
 	* Bug: sometimes doesn't advance to next line (same line event reported multiple times).
@@ -340,7 +340,7 @@ end --189
 local function compile_chunk(block, env)
 	local source = "debugger.lua REPL"
 	local chunk = nil
-	
+
 	if _VERSION <= "Lua 5.1" then
 		chunk = loadstring(block, source)
 		if chunk then setfenv(chunk, env) end
@@ -348,7 +348,7 @@ local function compile_chunk(block, env)
 		-- The Lua 5.2 way is a bit cleaner
 		chunk = load(block, source, "t", env)
 	end
-	
+
 	if chunk then
 		return chunk
 	else
@@ -383,7 +383,7 @@ local function cmd_print(expr)
 	local env = local_bindings(1, true)
 	local chunk = compile_chunk("return "..expr, env)
 	if chunk == nil then return false end
-	
+
 	-- Call the chunk and collect the results.
 	local results = pack(pcall(chunk, unpack(rawget(env, "...") or {})))
 
@@ -400,7 +400,7 @@ local function cmd_print(expr)
 		end
 		dbg.writeln(COLOR_BLUE..expr..COLOR_RED.." => "..COLOR_RESET..output)
 	end
-	
+
 	return false
 end
 
@@ -475,38 +475,38 @@ local function cmd_trace()
 	local offset = stack_offset - stack_top
 	local message = string.format("Inspecting frame: %d - (%s)", offset, location)
 	local str = debug.traceback(message, stack_top + LOCAL_STACK_LEVEL)
-	
+
 	-- Iterate the lines of the stack trace so we can highlight the current one.
 	local line_num = -2
 	while str and #str ~= 0 do
 		local line, rest = string.match(str, "([^\n]*)\n?(.*)")
 		str = rest
-		
+
 		if line_num >= 0 then line = tostring(line_num)..line end
 		dbg.writeln((line_num + stack_top == stack_offset) and COLOR_BLUE..line..COLOR_RESET or line)
 		line_num = line_num + 1
 	end
-	
+
 	return false
 end
 
 local function cmd_locals()
 	local bindings = local_bindings(1, false)
-	
+
 	-- Get all the variable binding names and sort them
 	local keys = {}
 	for k, _ in pairs(bindings) do table.insert(keys, k) end
 	table.sort(keys)
-	
+
 	for _, k in ipairs(keys) do
 		local v = bindings[k]
-		
+
 		-- Skip the debugger object itself, temporaries and Lua 5.2's _ENV object.
 		if not rawequal(v, dbg) and k ~= "_ENV" and k ~= "(*temporary)" then
 			dbg.writeln("\t"..COLOR_BLUE.."%s "..COLOR_RED.."=>"..COLOR_RESET.." %s", k, pretty(v, 0))
 		end
 	end
-	
+
 	return false
 end
 
@@ -527,7 +527,7 @@ local function match_command(line)
 		["h"] = function() dbg.writeln(help_message); return false end,
 		["q"] = function() os.exit(0) end,
 	}
-	
+
 	for cmd, cmd_func in pairs(commands) do
 		local matches = {string.match(line, "^("..cmd..")$")}
 		if matches[1] then
@@ -579,7 +579,7 @@ end
 
 repl = function()
 	dbg.writeln(format_stack_frame_info(debug.getinfo(LOCAL_STACK_LEVEL - 3 + stack_top)))
-	
+
 	repeat
 		local success, done, hook = pcall(run_command, dbg.read(COLOR_RED.."debugger.lua> "..COLOR_RESET))
 		if success then
@@ -596,11 +596,11 @@ end
 dbg = setmetatable({}, {
 	__call = function(self, condition, offset)
 		if condition then return end
-		
+
 		offset = (offset or 0)
 		stack_offset = offset
 		stack_top = offset
-		
+
 		debug.sethook(hook_next(1), "crl")
 		return
 	end,
@@ -617,7 +617,7 @@ function dbg.error(err, level)
 	level = level or 1
 	dbg.writeln(COLOR_RED.."Debugger stopped on error:"..COLOR_RESET.."(%s)", pretty(err))
 	dbg(false, level)
-	
+
 	error(err, level)
 end
 
@@ -627,7 +627,7 @@ function dbg.assert(condition, message)
 		dbg.writeln(COLOR_RED.."Debugger stopped on "..COLOR_RESET.."assert(..., %s)", message)
 		dbg(false, 1)
 	end
-	
+
 	assert(condition, message)
 end
 
@@ -655,7 +655,7 @@ end
 function dbg.msgh(...)
 	dbg.write(...)
 	dbg(false, 1)
-	
+
 	return ...
 end
 
@@ -679,11 +679,11 @@ if ffi then
 	ffi.cdef[[
 		bool isatty(int);
 		void free(void *ptr);
-		
+
 		char *readline(const char *);
 		int add_history(const char *);
 	]]
-	
+
 	stdin_isatty = ffi.C.isatty(0)
 	stdout_isatty = ffi.C.isatty(1)
 end
