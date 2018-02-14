@@ -484,4 +484,4 @@ pcall(function()
 	end
 end)
 
-return dbg
+_G.dbg = dbg
