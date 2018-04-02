@@ -29,6 +29,7 @@
 -- Use ANSI color codes in the prompt by default.
 local COLOR_RED = ""
 local COLOR_BLUE = ""
+local COLOR_GRAY = ""
 local COLOR_RESET = ""
 
 local function pretty(obj, recurse)
@@ -517,9 +518,11 @@ end
 -- Conditionally enable color support.
 local color_maybe_supported = (stdout_isatty and os.getenv("TERM") and os.getenv("TERM") ~= "dumb")
 if color_maybe_supported and not os.getenv("DBG_NOCOLOR") then
-	COLOR_RED = string.char(27) .. "[38;5;196m"
-	COLOR_BLUE = string.char(27) .. "[38;5;38m"
-	COLOR_RESET = string.char(27) .. "[0m"
+	local esc = string.char(27)
+	COLOR_RED = esc .. "[38;5;196m"
+	COLOR_BLUE = esc .. "[38;5;38m"
+	COLOR_GRAY = esc .. "[38;5;59m"
+	COLOR_RESET = esc .. "[39m"
 end
 
 pcall(function()
@@ -544,8 +547,34 @@ pcall(function()
 		autocomplete(_G, input, matches)
 	end)
 
+	-- Variable hinting for locals
+	-- linenoise.sethints(function(input)
+	-- 	if #input > 2 and input:sub(1, 2) == 'p ' then
+	-- 		input = input:sub(3)
+  --
+	-- 		local scope = local_bindings(1, false)
+	-- 		for name, _ in pairs(scope) do
+	-- 			if name:match('^' .. input .. '.*') then
+	-- 				return name, {color = COLOR_GRAY}
+	-- 			end
+	-- 		end
+	-- 	end
+	-- end)
+
 	dbg.read = function(prompt)
 		local str = linenoise.linenoise(prompt)
+		-- if str == '.editor' then
+		-- 	local lines = {}
+		-- 	local prompt = COLOR_GRAY .. '............. ' .. COLOR_RESET
+		-- 	linenoise.setmultiline(true)
+		-- 	while true do
+		-- 		local line = linenoise.linenoise(prompt)
+		-- 		if line == '' then break end
+		-- 		lines[#lines + 1] = line
+		-- 	end
+		-- 	linenoise.setmultiline(false)
+		-- 	print(COLOR_BLUE .. table.concat(lines, '\n') .. COLOR_RESET)
+		-- 	return 'p ' .. table.concat(lines, '\n')
 		if str and not str:match "^%s*$" then
 			linenoise.historyadd(str)
 			linenoise.historysave(hist_path)
