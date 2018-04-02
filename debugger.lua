@@ -473,7 +473,7 @@ function dbg.call(f, l)
 		dbg(false, (l or 0) + 1)
 
 		-- Prevent a tail call to dbg().
-		return
+		return debug.traceback(err, 1)
 	end)
 end
 
