@@ -41,11 +41,11 @@ local function pretty(obj, recurse)
 	if type(obj) == "string" then
 		-- Dump the string so that escape sequences are printed.
 		return string.format("%q", obj)
-	elseif type(obj) == "table" and not coerceable(obj) and not recurse then
+	elseif type(obj) == "table" and not coerceable(obj) and recurse then
 		local str = "{"
 
 		for k, v in pairs(obj) do
-			local pair = pretty(k, true).." = "..pretty(v, true)
+			local pair = pretty(k).." = "..pretty(v)
 			str = str..(str == "{" and pair or ", "..pair)
 		end
 
@@ -254,7 +254,7 @@ local function cmd_print(expr)
 	else
 		local result = ""
 		for i = 2, #results do
-			result = result..(i ~= 2 and ", " or "")..pretty(results[i])
+			result = result..(i ~= 2 and ", " or "")..pretty(results[i], true)
 		end
 
 		dbg.writeln(COLOR_BLUE..expr..COLOR_RED.." => "..COLOR_RESET..result)
@@ -354,7 +354,7 @@ local function cmd_locals()
 
 		-- Skip the debugger object itself, temporaries and Lua 5.2's _ENV object.
 		if not rawequal(v, dbg) and k ~= "_ENV" and k ~= "(*temporary)" then
-			dbg.writeln("\t"..COLOR_BLUE.."%s "..COLOR_RED.."=>"..COLOR_RESET.." %s", k, pretty(v, true))
+			dbg.writeln("\t"..COLOR_BLUE.."%s "..COLOR_RED.."=>"..COLOR_RESET.." %s", k, pretty(v))
 		end
 	end
 
