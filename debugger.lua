@@ -121,24 +121,27 @@ local function format_stack_frame_info(info)
 end
 
 local repl
+local lua_error = _G.error
 
 local function hook_factory(repl_threshold)
 	return function(offset)
 		return function(event, _)
 			local info = debug.getinfo(2)
 
-			if event == "call" and info.linedefined >= 0 then
-				offset = offset + 1
-			elseif event == "return" and info.linedefined >= 0 then
-				if offset <= repl_threshold then
-					-- TODO this is what causes the duplicated lines
-					-- Don't remember why this is even here...
-					--repl()
-				else
+			-- Ignore non-Lua hook events.
+			if info.linedefined >= 0 then
+				if event == "call" then
+					offset = offset + 1
+				elseif event == "return" then
 					offset = offset - 1
+				elseif event == "line" then
+					if offset <= repl_threshold then repl() end
 				end
-			elseif event == "line" and offset <= repl_threshold then
-				repl()
+
+			-- Except for the built-in `_G.error` function,
+			-- which resets the `offset` so repl() is called.
+			elseif info.func == lua_error then
+				offset = -1
 			end
 		end
 	end
