@@ -283,26 +283,42 @@ local function cmd_print(expr)
 end
 
 local function cmd_up()
-	local info = debug.getinfo(stack_offset + LOCAL_STACK_LEVEL + 1)
+	local offset = stack_offset
+	local info
+	repeat
+		offset = offset + 1
+		info = debug.getinfo(offset + LOCAL_STACK_LEVEL)
+		if not info then break end
+	until info.linedefined >= 0
 
 	if info then
-		stack_offset = stack_offset + 1
+		stack_offset = offset
 	else
+		info = debug.getinfo(stack_offset + LOCAL_STACK_LEVEL)
 		dbg.writeln(COLOR_BLUE.."Already at the top of the stack."..COLOR_RESET)
 	end
 
-	dbg.writeln("Inspecting frame: "..format_stack_frame_info(debug.getinfo(stack_offset + LOCAL_STACK_LEVEL)))
+	dbg.writeln("Inspecting frame: "..format_stack_frame_info(info))
 	return false
 end
 
 local function cmd_down()
-	if stack_offset > stack_top then
-		stack_offset = stack_offset - 1
+	local offset = stack_offset
+	local info
+	repeat
+		offset = offset - 1
+		info = debug.getinfo(offset + LOCAL_STACK_LEVEL)
+		if not info then break end
+	until info.linedefined >= 0
+
+	if info then
+		stack_offset = offset
 	else
+		info = debug.getinfo(stack_offset + LOCAL_STACK_LEVEL)
 		dbg.writeln(COLOR_BLUE.."Already at the bottom of the stack."..COLOR_RESET)
 	end
 
-	dbg.writeln("Inspecting frame: "..format_stack_frame_info(debug.getinfo(stack_offset + LOCAL_STACK_LEVEL)))
+	dbg.writeln("Inspecting frame: "..format_stack_frame_info(info))
 	return false
 end
 
