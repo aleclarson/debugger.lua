@@ -121,12 +121,54 @@ local function format_stack_frame_info(info)
 end
 
 local repl
+local threw = false
+local caught = false
+local catcher
 local lua_error = _G.error
+local lua_pcall = _G.pcall
+local lua_xpcall = _G.xpcall
+
+local function find_catcher()
+	local found_pcall = false
+	do local i = 4; repeat
+		local info = debug.getinfo(i)
+		if found_pcall then
+			if info.linedefined >= 0 then
+				return info.func
+			end
+		elseif info.func == lua_pcall or info.func == lua_xpcall then
+			found_pcall = true
+		end
+		i = i + 1
+	until info == nil end
+end
 
 local function hook_factory(repl_threshold)
 	return function(offset)
 		return function(event, _)
 			local info = debug.getinfo(2)
+
+			-- Entering dbg.call
+			if caught and threw then
+				threw, stack_top, stack_offset = false, 2, 2
+				-- stop the infinite search for pcall
+				offset = -1
+
+			-- Exiting dbg.call
+			elseif caught then
+				caught, stack_top, stack_offset = false, 0, 0
+				-- step/next/finish all do the same thing here
+				offset = repl_threshold + 1
+
+			elseif threw then
+				-- Looking for the catcher
+				if info.func == catcher then
+					threw = false
+					offset = -1
+				elseif event == "line" then
+					return -- Avoid repl calls until the catcher is reached.
+				end
+			end
 
 			-- Ignore non-Lua hook events.
 			if info.linedefined >= 0 then
@@ -139,9 +181,11 @@ local function hook_factory(repl_threshold)
 				end
 
 			-- Except for the built-in `_G.error` function,
-			-- which resets the `offset` so repl() is called.
+			-- which triggers a search for pcall or xpcall.
 			elseif info.func == lua_error then
-				offset = -1
+				threw = true
+				offset = math.huge
+				catcher = find_catcher()
 			end
 		end
 	end
@@ -574,10 +618,7 @@ end
 function dbg.call(f, ...)
 	local catch = function(err)
 		dbg.writeln(COLOR_RED.."Debugger stopped on error: "..COLOR_RESET..pretty(err))
-		dbg(false, 2)
-
-		-- Prevent a tail call to dbg().
-		return debug.traceback(err, 1)
+		caught = true
 	end
 	if select('#', ...) > 0 then
 		local args = {...}
