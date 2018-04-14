@@ -469,11 +469,11 @@ local function match_command(line)
 	for cmd, cmd_func in pairs(commands) do
 		local matches = {string.match(line, "^("..cmd..")$")}
 		if matches[1] then
-			return cmd_func, select(2, unpack(matches))
+			return cmd_func, {select(2, unpack(matches))}
 		end
 	end
 
-	return cmd_print, line
+	return cmd_print, {line}
 end
 
 -- Run a command line
@@ -492,10 +492,10 @@ local function run_command(line)
 		last_cmd = line
 	end
 
-	local command, command_arg = match_command(line)
+	local command, command_args = match_command(line)
 	if command then
 		-- unpack({...}) prevents tail call elimination so the stack frame indices are predictable.
-		return unpack({command(command_arg)})
+		return unpack({command(unpack(command_args))})
 	end
 end
 
