@@ -493,6 +493,42 @@ local function cmd_down()
 	return false
 end
 
+local function cmd_trace()
+	local location = format_stack_frame_info(debug.getinfo(stack_offset + LOCAL_STACK_LEVEL))
+	local offset = stack_offset - stack_top
+	local message = string.format("Inspecting frame: %d - (%s)", offset, location)
+	local str = debug.traceback(message, stack_top + LOCAL_STACK_LEVEL)
+
+	-- Iterate the lines of the stack trace so we can highlight the current one.
+	local line_num = -2
+	while str and #str ~= 0 do
+		local line, rest = string.match(str, "([^\n]*)\n?(.*)")
+		str = rest
+
+		if line_num >= 0 then line = tostring(line_num)..line end
+		dbg.writeln((line_num + stack_top == stack_offset) and COLOR_BLUE..line..COLOR_RESET or line)
+		line_num = line_num + 1
+	end
+
+	return false
+end
+
+local function cmd_go(offset)
+	offset = stack_top + tonumber(offset)
+	local info = debug.getinfo(offset + LOCAL_STACK_LEVEL)
+	if info then
+		stack_offset = offset
+		dbg.writeln("Inspecting frame: "..format_stack_frame_info(info))
+	else
+		dbg.writeln(COLOR_BLUE.."Out of range."..COLOR_RESET)
+		stack_offset = stack_offset + 1
+		stack_top = stack_top + 1
+		cmd_trace()
+		stack_top = stack_top - 1
+		stack_offset = stack_offset - 1
+	end
+end
+
 local function cmd_where(line_num)
 	local info = debug.getinfo(stack_offset + LOCAL_STACK_LEVEL)
 	if not info then return end
@@ -528,26 +564,6 @@ local function cmd_where(line_num)
 	end
 end
 
-local function cmd_trace()
-	local location = format_stack_frame_info(debug.getinfo(stack_offset + LOCAL_STACK_LEVEL))
-	local offset = stack_offset - stack_top
-	local message = string.format("Inspecting frame: %d - (%s)", offset, location)
-	local str = debug.traceback(message, stack_top + LOCAL_STACK_LEVEL)
-
-	-- Iterate the lines of the stack trace so we can highlight the current one.
-	local line_num = -2
-	while str and #str ~= 0 do
-		local line, rest = string.match(str, "([^\n]*)\n?(.*)")
-		str = rest
-
-		if line_num >= 0 then line = tostring(line_num)..line end
-		dbg.writeln((line_num + stack_top == stack_offset) and COLOR_BLUE..line..COLOR_RESET or line)
-		line_num = line_num + 1
-	end
-
-	return false
-end
-
 local function cmd_locals()
 	local bindings = local_bindings(1, false)
 
@@ -580,8 +596,9 @@ local function match_command(line)
 		["e (.*)"] = cmd_eval,
 		["u"] = cmd_up,
 		["d"] = cmd_down,
-		["w%s?(%d*)"] = cmd_where,
 		["t"] = cmd_trace,
+		["g%s?(%d+)"] = cmd_go,
+		["w%s?(%d*)"] = cmd_where,
 		["l"] = cmd_locals,
 		["h"] = function() dbg.writeln(help_message); return false end,
 		["q"] = function() os.exit(0) end,
