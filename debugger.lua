@@ -151,14 +151,6 @@ local hook_step = hook_factory(1)
 local hook_next = hook_factory(0)
 local hook_finish = hook_factory(-1)
 
-local function table_merge(t1, t2)
-	local tbl = {}
-	for k, v in pairs(t1) do tbl[k] = v end
-	for k, v in pairs(t2) do tbl[k] = v end
-
-	return tbl
-end
-
 local function istring(str, sep)
   local sep = sep or "\n"
   local pattern = string.format("(.-)(%s)", sep)
@@ -177,6 +169,34 @@ local function istring(str, sep)
       return iidx, capture
     end
   end
+end
+
+local repl_env = setmetatable({}, {__index = _G})
+
+local function local_bind(offset, name, value)
+	local level = stack_offset + offset + LOCAL_STACK_LEVEL
+
+	-- Look for a local with the given name.
+	do local i = 1; repeat
+		local var = debug.getlocal(level, i)
+		if name == var then
+			return debug.setlocal(level, i, value)
+		end
+		i = i + 1
+	until var == nil end
+
+	-- Look for an upvalue with the given name.
+	local func = debug.getinfo(level).func
+	do local i = 1; repeat
+		local var = debug.getupvalue(func, i)
+		if name == var then
+			return debug.setupvalue(func, i, value)
+		end
+		i = i + 1
+	until var == nil end
+
+	-- Local variable with the given name does not exist.
+	repl_env[name] = value
 end
 
 -- Create a table of all the locally accessible variables.
@@ -215,7 +235,11 @@ local function local_bindings(offset, include_globals)
 		local env = (_VERSION <= "Lua 5.1" and getfenv(func) or bindings._ENV)
 
 		-- Finally, merge the tables and add a lookup for globals.
-		return setmetatable(table_merge(env or {}, bindings), {__index = _G})
+		return setmetatable(bindings, {
+			__index = function(self, name)
+				return repl_env[name] or env[name]
+			end
+		})
 	else
 		return bindings
 	end
@@ -286,14 +310,24 @@ local function cmd_print(expr)
 	return false
 end
 
-local function cmd_eval(stat)
-	local env = local_bindings(1, true)
-	local chunk = compile_chunk(stat, env)
+local function cmd_assign(name, expr)
+	local index = local_bindings(1, true)
+	local env = setmetatable({}, {
+		__index = index,
+		__newindex = function(env, name, value)
+			local_bind(8, name, value)
+		end
+	})
+	local chunk = compile_chunk(name.."="..expr, env)
 	if chunk == nil then return false end
 
 	-- Call the chunk and collect the results.
-	local success, err = pcall(chunk, unpack(rawget(env, "...") or {}))
-	if not success then
+	local success, err = pcall(chunk, unpack(rawget(index, "...") or {}))
+	if success then
+		stack_offset = stack_offset + 1
+		cmd_print(name)
+		stack_offset = stack_offset - 1
+	else
 		dbg.writeln(COLOR_RED.."Error:"..COLOR_RESET.." %s", err)
 	end
 end
@@ -421,8 +455,8 @@ local function match_command(line)
 		["s"] = cmd_step,
 		["n"] = cmd_next,
 		["f"] = cmd_finish,
+		["(.*)%s=%s(.*)"] = cmd_assign,
 		["p%s(.*)"] = cmd_print,
-		["e%s(.*)"] = cmd_eval,
 		["u"] = cmd_up,
 		["d"] = cmd_down,
 		["w%s?(%d*)"] = cmd_where,
