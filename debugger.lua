@@ -143,10 +143,43 @@ local function find_catcher()
 	until info == nil end
 end
 
+local active_hook, active_func
 local function hook_factory(repl_threshold)
 	return function(offset)
-		return function(event, _)
+		local hook, base_depth
+		hook = function(event)
 			local info = debug.getinfo(2)
+			local is_lua = info.linedefined >= 0
+
+			if jit and is_lua then
+				-- Check for the first event of this hook.
+				if hook ~= active_hook then
+					base_depth = select(2, debug.traceback():gsub("\n", "")) - offset
+					if event == "call" and active_func ~= info.func then
+						-- First event is a non-recursive function call.
+						base_depth = base_depth - 1
+					else
+						active_func = info.func
+					end
+					active_hook = hook
+				end
+
+				-- Check for a function return. (implicit or explicit)
+				if event == "line" then
+					if active_func ~= info.func then
+						local depth = select(2, debug.traceback():gsub("\n", ""))
+						offset = depth - base_depth
+						active_func = info.func
+					end
+
+				-- Check for a non-recursive function call.
+				elseif event == "call" then
+					if active_func ~= info.func then
+						offset = offset + 1
+						active_func = info.func
+					end
+				end
+			end
 
 			-- Entering dbg.call
 			if caught and threw then
@@ -170,24 +203,29 @@ local function hook_factory(repl_threshold)
 				end
 			end
 
-			-- Ignore non-Lua hook events.
-			if info.linedefined >= 0 then
-				if event == "call" then
-					offset = offset + 1
-				elseif event == "return" then
-					offset = offset - 1
-				elseif event == "line" then
-					if offset <= repl_threshold then repl() end
+			-- Ignore non-Lua hook events
+			if is_lua then
+				if event == "line" then
+					if offset <= repl_threshold then
+						active_hook = nil
+						repl()
+					end
+				elseif not jit then
+					if event == "call" then
+						offset = offset + 1
+					else
+						offset = offset - 1
+					end
 				end
 
-			-- Except for the built-in `_G.error` function,
-			-- which triggers a search for pcall or xpcall.
+			-- Errors trigger a search for pcall/xpcall
 			elseif info.func == lua_error then
 				threw = true
 				offset = math.huge
 				catcher = find_catcher()
 			end
 		end
+		return hook
 	end
 end
 
