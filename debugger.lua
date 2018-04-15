@@ -657,6 +657,7 @@ function dbg.call(f, ...)
 	local catch = function(err)
 		dbg.writeln(COLOR_RED.."Debugger stopped on error: "..COLOR_RESET..pretty(err))
 		caught = true
+		return err
 	end
 	if select('#', ...) > 0 then
 		local args = {...}
