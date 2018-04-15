@@ -143,6 +143,17 @@ local function find_catcher()
 	until info == nil end
 end
 
+-- Find the nearest Lua frame offset.
+local function get_lua_offset(top)
+	local i = top
+	while true do
+		local info = debug.getinfo(i + 3)
+		if not info then return top end
+		if info.linedefined < 0 then i = i + 1
+		else return i end
+	end
+end
+
 local active_hook, active_func
 local function hook_factory(repl_threshold)
 	return function(offset)
@@ -183,7 +194,7 @@ local function hook_factory(repl_threshold)
 
 			-- Entering dbg.call
 			if caught and threw then
-				threw, stack_top, stack_offset = false, 2, 2
+				threw, stack_top, stack_offset = false, 1, get_lua_offset(1)
 				-- stop the infinite search for pcall
 				offset = -1
 
@@ -657,6 +668,10 @@ function dbg.call(f, ...)
 	local catch = function(err)
 		dbg.writeln(COLOR_RED.."Debugger stopped on error: "..COLOR_RESET..pretty(err))
 		caught = true
+		if active_hook == nil then
+			threw = true
+			debug.sethook(hook_next(1), "crl")
+		end
 		return err
 	end
 	if select('#', ...) > 0 then
