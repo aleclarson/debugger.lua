@@ -503,6 +503,7 @@ local function cmd_up()
 	end
 
 	dbg.writeln("Inspecting frame: "..format_stack_frame_info(info))
+	where(3, info)
 	return false
 end
 
@@ -523,6 +524,7 @@ local function cmd_down()
 	end
 
 	dbg.writeln("Inspecting frame: "..format_stack_frame_info(info))
+	where(3, info)
 	return false
 end
 
