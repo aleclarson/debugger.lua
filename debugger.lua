@@ -84,8 +84,6 @@ local stack_top = 0
 -- Changed using the up/down commands
 local stack_offset = 0
 
-local source_contents = {}
-
 local dbg
 
 -- Default dbg.read function
@@ -244,6 +242,7 @@ local hook_step = hook_factory(1)
 local hook_next = hook_factory(0)
 local hook_finish = hook_factory(-1)
 
+-- ipairs for string parsing
 local function istring(str, sep)
   local sep = sep or "\n"
   local pattern = string.format("(.-)(%s)", sep)
@@ -262,6 +261,40 @@ local function istring(str, sep)
       return iidx, capture
     end
   end
+end
+
+local source_cache = {}
+
+local function where(around, info)
+	local source
+
+	local filename = string.match(info.source, "^@(.*)$")
+	if filename then
+		source = source_cache[filename]
+		if not source then
+			local fh = io.open(filename, "r")
+			if fh then
+				source = fh:read("*a"), fh:close()
+				source_cache[filename] = source
+			else
+				source = nil
+			end
+		end
+	end
+
+	if not source then
+		dbg.writeln(COLOR_RED.."Error: Could not find source file for current function."..COLOR_RESET)
+	else
+		local cur_idx = info.currentline
+		local min_idx = cur_idx - around
+		local max_idx = cur_idx + around
+		for idx, source_line in istring(source, "\n") do
+			if idx >= min_idx and idx <= max_idx then
+				dbg.writeln(COLOR_BLUE.."%d\t"..COLOR_RED.."%s"..COLOR_RESET.."%s",
+				tonumber(idx), (idx == cur_idx and "=> " or "   "), source_line)
+			end
+		end
+	end
 end
 
 local repl_env = setmetatable({}, {__index = _G})
@@ -501,41 +534,6 @@ local function cmd_go(offset)
 	end
 end
 
-local function cmd_where(line_num)
-	local info = debug.getinfo(stack_offset + LOCAL_STACK_LEVEL)
-	if not info then return end
-
-	local source = info.source
-	local source_lidx = info.currentline
-
-	local source_filename = string.match(source, "^@(.*)$")
-	if source_filename then
-		if source_contents[source_filename] then
-			source = source_contents[source_filename]
-		else
-			local source_file = io.open(source_filename, "r")
-			if not source_file then source = nil
-			else source = source_file:read("*a"); source_file:close() end
-
-			source_contents[source_filename] = source
-		end
-	end
-
-	if not source then
-		dbg.writeln(COLOR_RED.."Error: Could not find source file for current function."..COLOR_RESET)
-	else
-		local line_num = tonumber(line_num) or 5
-		local line_min, line_max = source_lidx - line_num, source_lidx + line_num
-
-		for lidx, source_line in istring(source, "\n") do
-			if lidx >= line_min and lidx <= line_max then
-				dbg.writeln(COLOR_BLUE.."%d\t"..COLOR_RED.."%s"..COLOR_RESET.."%s",
-				tonumber(lidx), (lidx == source_lidx and "=> " or "   "), source_line)
-			end
-		end
-	end
-end
-
 local function cmd_locals()
 	local bindings = local_bindings(1, false)
 
@@ -570,7 +568,10 @@ local function match_command(line)
 		["d"] = cmd_down,
 		["t"] = cmd_trace,
 		["g%s?(%d+)"] = cmd_go,
-		["w%s?(%d*)"] = cmd_where,
+		["w%s?(%d*)"] = function(line_num)
+			local offset = stack_offset + LOCAL_STACK_LEVEL
+			where(tonumber(line_num) or 3, debug.getinfo(offset))
+		end,
 		["l"] = cmd_locals,
 		["h"] = function() dbg.writeln(help_message); return false end,
 		["q"] = function() os.exit(0) end,
@@ -610,7 +611,9 @@ local function run_command(line)
 end
 
 repl = function()
-	dbg.writeln(format_stack_frame_info(debug.getinfo(LOCAL_STACK_LEVEL - 3 + stack_offset)))
+	local info = debug.getinfo(LOCAL_STACK_LEVEL - 3 + stack_offset)
+	dbg.writeln(format_stack_frame_info(info))
+	if info.linedefined >= 0 then where(0, info) end
 
 	repeat
 		local success, done, hook = pcall(run_command, dbg.read(COLOR_RED.."debugger.lua> "..COLOR_RESET))
