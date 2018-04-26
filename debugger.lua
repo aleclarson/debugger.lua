@@ -667,7 +667,9 @@ repl = function()
 	if frame_has_file(info) then where(0, info) end
 
 	repeat
+		if dbg.onenter then dbg.onenter() end
 		local success, done, hook = pcall(run_command, dbg.read(COLOR_RED.."debugger.lua> "..COLOR_RESET))
+		if dbg.onexit then dbg.onexit() end
 		if success then
 			debug.sethook(hook and hook(0), "crl")
 		else
