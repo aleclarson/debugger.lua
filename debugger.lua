@@ -383,17 +383,20 @@ local source_cache = {}
 
 local function where(around, info)
 	local source
-
-	local filename = string.match(info.source, "^@(.*)$")
-	if filename then
-		source = source_cache[filename]
-		if not source then
-			local fh = io.open(filename, "r")
-			if fh then
-				source = fh:read("*a"), fh:close()
-				source_cache[filename] = source
-			else
-				source = nil
+	if info.short_src:match("^%[string ") then
+		source = info.source
+	else
+		local filename = string.match(info.source, "^@(.*)$")
+		if filename then
+			source = source_cache[filename]
+			if not source then
+				local fh = io.open(filename, "r")
+				if fh then
+					source = fh:read("*a"), fh:close()
+					source_cache[filename] = source
+				else
+					source = nil
+				end
 			end
 		end
 	end
