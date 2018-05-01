@@ -157,7 +157,7 @@ local function find_pcaller()
 		if info == nil then return end
 		if found_pcall then
 			if frame_has_file(info) then
-				return info.func
+				return info.func, i
 			end
 		elseif info.func == lua_pcall or info.func == lua_xpcall then
 			found_pcall = true
@@ -256,9 +256,21 @@ local function hook_factory(repl_threshold)
 
 			-- Find the frame that used pcall/xcall
 			elseif info.func == lua_error then
-				threw = true
-				offset = math.huge
-				pcaller = find_pcaller()
+				local level
+				pcaller, level = find_pcaller()
+				if pcaller and pcaller ~= dbg.call then
+					-- Avoid pausing on normal pcalls.
+					active_hook = nil
+					debug.sethook(nil)
+				else
+					threw = true
+					offset = math.huge
+
+					-- Search for the caller of dbg.call
+					if pcaller == dbg.call then
+						pcaller = debug.getinfo(level + 1).func
+					end
+				end
 			end
 		end
 		return hook
